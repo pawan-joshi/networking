@@ -1,5 +1,5 @@
 import Foundation
-import NetworkLayer
+import Networking
 
 // MARK: - MockURLProtocol
 
