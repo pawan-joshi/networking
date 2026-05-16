@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+build/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.pins
+*.xcodeproj
+# Keep Package.resolved checked in so collaborators get reproducible builds.
+!Package.resolved
+
+# SwiftPM-generated artifacts
+.netrc
+
+# AppCode / JetBrains
+.idea/
+
+# VS Code
+.vscode/
+
+# Editors
+*.swp
+*.swo
+*~
+
+# Logs / coverage
+*.log
+*.xcresult/
+coverage/
+*.profraw
+*.profdata
