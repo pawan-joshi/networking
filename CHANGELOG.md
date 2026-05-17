@@ -8,22 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ### Added
-- _Describe new features here as you ship them._
+- `AuthTokenInterceptor` — injects a bearer token into authenticated requests; strips the `X-Requires-Authentication` sentinel before the request reaches the server.
+- `HeadersInterceptor` — merges a dynamic header dictionary into outgoing requests, skipping headers already set by the caller.
+- `RetryInterceptor` — retries failed requests up to a configurable limit with an optional fixed delay, targeting common transient status codes (408, 429, 5xx) and network-level errors.
+- `AuthTokenInterceptor` convenience initialiser accepting `any TokenProvider`, defaulting the token header field to `Authorization`.
 
 ### Changed
-- _Document backwards-compatible changes here._
-
-### Deprecated
-- _List APIs you'll remove in the next major release._
+- Raised macOS minimum deployment target from 12 to 13 (required by `JSONDecoder` `Sendable` conformance).
 
 ### Removed
-- _Hard breaks — only allowed on a MAJOR bump._
+- Legacy `HTTPClientTests.swift` that imported the old `NetworkLayer` module name.
 
 ### Fixed
-- _Bug fixes._
-
-### Security
-- _Anything users should patch to in the next PATCH release._
+- Added missing `import Foundation` to `AuthTokenInterceptor`, `HeadersInterceptor`, and `RetryInterceptor` (`URLRequest` and `TimeInterval` were not in scope).
+- Corrected `await try` to `try await` in `HeadersInterceptor.adapt(_:)`.
+- Fixed `AuthTokenInterceptor+TokenProvider` convenience init to forward the `tokenField` argument to the designated initialiser.
+- Corrected `import NetworkLayer` to `import Networking` in `MockHTTPClient` and `MockURLProtocol`.
 
 ## [1.0.0] - 2026-05-16
 

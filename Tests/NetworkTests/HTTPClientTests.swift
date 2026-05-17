@@ -1,7 +1,7 @@
 import Combine
 import XCTest
-@testable import NetworkLayer
-import NetworkLayerTesting
+@testable import Networking
+import NetworkTesting
 
 // MARK: - Test Fixtures
 
@@ -216,19 +216,18 @@ final class DataTransferTests: HTTPClientTestCase {
 
     // MARK: Closure
 
-    func test_send_closure_deliversDecodedValue() throws {
+    func test_send_closure_deliversDecodedValue() async throws {
         let expected = User(id: 3, name: "Carol")
         try stubSuccess(expected)
 
-        let expectation = expectation(description: "Closure send")
-        var received: User?
-
-        client.send(TestEndpoint.getUser(id: 3)) { (result: Result<User, NetworkError>) in
-            received = try? result.get()
-            expectation.fulfill()
+        // Bridge the closure-based API into async/await so the captured value
+        // doesn't have to escape into a `@Sendable` closure.
+        let received: User? = await withCheckedContinuation { continuation in
+            client.send(TestEndpoint.getUser(id: 3)) { (result: Result<User, NetworkError>) in
+                continuation.resume(returning: try? result.get())
+            }
         }
 
-        wait(for: [expectation], timeout: 3)
         XCTAssertEqual(received, expected)
     }
 
@@ -368,7 +367,9 @@ final class InterceptorTests: XCTestCase {
             throw URLError(.cancelled)
         }
 
-        let interceptor = AuthTokenInterceptor { "test-token-123" }
+        let interceptor = AuthTokenInterceptor(tokenField: "Authorization") {
+            "Bearer test-token-123"
+        }
         let client = HTTPClient(
             session: session,
             configuration: .init(cache: NullCache(), interceptors: [interceptor])
@@ -396,7 +397,7 @@ final class InterceptorTests: XCTestCase {
             var requiresAuthentication: Bool = false
         }
 
-        let interceptor = AuthTokenInterceptor {
+        let interceptor = AuthTokenInterceptor(tokenField: "Authorization") {
             XCTFail("tokenProvider must not be called for unauthenticated requests")
             return "should-not-be-used"
         }
@@ -419,7 +420,7 @@ final class InterceptorTests: XCTestCase {
             throw URLError(.cancelled)
         }
 
-        let interceptor = AuthTokenInterceptor { "tok" }
+        let interceptor = AuthTokenInterceptor(tokenField: "Authorization") { "tok" }
         let client = HTTPClient(
             session: session,
             configuration: .init(cache: NullCache(), interceptors: [interceptor])
@@ -651,10 +652,10 @@ final class MockHTTPClientTests: XCTestCase {
 
 final class MultipartFormDataTests: XCTestCase {
 
-    func test_encode_producesCorrectBoundary() {
+    func test_encode_producesCorrectBoundary() throws {
         let part = FormDataPart(name: "file", fileName: "test.txt", mimeType: "text/plain", data: Data("hello".utf8))
         let multipart = MultipartFormData(parts: [part], boundary: "TEST_BOUNDARY")
-        let body = multipart.encode()
+        let body = try multipart.encode()
         let bodyString = String(data: body, encoding: .utf8)!
 
         XCTAssertTrue(bodyString.contains("--TEST_BOUNDARY\r\n"))
@@ -669,10 +670,16 @@ final class MultipartFormDataTests: XCTestCase {
         XCTAssertEqual(multipart.contentType, "multipart/form-data; boundary=MY_BOUNDARY")
     }
 
-    func test_fieldFactory_createsTextPart() {
+    func test_fieldFactory_createsTextPart() throws {
         let part = FormDataPart.field(name: "username", value: "alice")
         XCTAssertEqual(part.name, "username")
-        XCTAssertEqual(String(data: part.data, encoding: .utf8), "alice")
         XCTAssertNil(part.fileName)
+
+        // `FormDataPart` keeps its bytes private; verify the contents by
+        // encoding through a `MultipartFormData` and looking at the result.
+        let body = try MultipartFormData(parts: [part], boundary: "B").encode()
+        let bodyString = String(data: body, encoding: .utf8) ?? ""
+        XCTAssertTrue(bodyString.contains("name=\"username\""))
+        XCTAssertTrue(bodyString.contains("alice"))
     }
 }

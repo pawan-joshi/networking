@@ -5,7 +5,7 @@ let package = Package(
     name: "Networking",
     platforms: [
         .iOS(.v15),
-        .macOS(.v12),
+        .macOS(.v13),
     ],
     products: [
         // Production library — link this into the app targets.
