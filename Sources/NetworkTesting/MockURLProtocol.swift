@@ -39,12 +39,24 @@ public final class MockURLProtocol: URLProtocol {
     /// Simulated network delay in seconds. Set to 0 (default) for instant responses.
     public static var responseDelay: TimeInterval = 0
 
+    // MARK: - Per-request state
+
+    private let stateLock = NSLock()
+    private var isStopped = false
+    private var pendingWorkItem: DispatchWorkItem?
+
     // MARK: - URLProtocol
 
     override public class func canInit(with request: URLRequest) -> Bool { true }
     override public class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override public func startLoading() {
+        stateLock.lock()
+        isStopped = false
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
+        stateLock.unlock()
+
         guard let handler = MockURLProtocol.requestHandler else {
             client?.urlProtocol(self, didFailWithError: MockError.noHandlerRegistered)
             return
@@ -54,19 +66,49 @@ public final class MockURLProtocol: URLProtocol {
         let capturedRequest = request
         let capturedClient = client
 
-        DispatchQueue.global().asyncAfter(deadline: .now() + delay) {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, !self.hasStopped else { return }
+
             do {
                 let (response, data) = try handler(capturedRequest)
+
+                guard !self.hasStopped else { return }
                 capturedClient?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-                if let data { capturedClient?.urlProtocol(self, didLoad: data) }
+
+                guard !self.hasStopped else { return }
+                if let data {
+                    capturedClient?.urlProtocol(self, didLoad: data)
+                }
+
+                guard !self.hasStopped else { return }
                 capturedClient?.urlProtocolDidFinishLoading(self)
             } catch {
+                guard !self.hasStopped else { return }
                 capturedClient?.urlProtocol(self, didFailWithError: error)
             }
         }
+
+        stateLock.lock()
+        pendingWorkItem = workItem
+        stateLock.unlock()
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    override public func stopLoading() {}
+    override public func stopLoading() {
+        stateLock.lock()
+        isStopped = true
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
+        stateLock.unlock()
+    }
+
+    private var hasStopped: Bool {
+        stateLock.lock()
+        let value = isStopped
+        stateLock.unlock()
+        return value
+    }
 
     // MARK: - Reset
 
